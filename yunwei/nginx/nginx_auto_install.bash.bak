@@ -1,0 +1,176 @@
+#!/bin/bash
+#nginx 源码安装nginx
+
+
+#进入脚本后，首先保存当前路径
+original_dir=`pwd`
+
+#定义一个输入路径的函数，递归方法实现；并且能简单的帮助用户判断输入的路劲是否有误？
+function input_nginx_dir() {
+	read -p"请输入解压后的nginx源码包路径：比如：/usr/local/src/nginx1-14.0  :" nginx_dir
+	cd $nginx_dir 
+#通过cd 命令，来判断输入路径是否正确，如果出错则重新输入。
+	[ $? -ne 0 ] && echo "路径输入错误，请重新输入" && input_nginx_dir
+#扫描当前目录下的文件名称，并保存。
+	list=`/bin/ls`
+#定义一个变量，用来保存解压nginx源码后，一般会存在的文件
+	nginx_pack_names="html configure conf man"
+	for i in $nginx_pack_names;do
+		echo $list | grep "$i" &> /dev/null
+		#逐一取出常用的名字，并用来和list中做比对，如果不存在，则提示用户：
+		if [ $? -ne 0 ]; then
+			read -p"您输入的目录中并不包含$i文件，您确定吗？yes/no" ans1
+			if [ $nas1 = 'yes' -o $ans1 = 'y' ];then
+				continue
+			else
+				input_nginx_dir
+			fi
+		fi
+	done				
+}
+
+cat<<EOF
+********************************************
+
+******欢迎使用本源码安装nginx的脚本********
+**需要事先下载、并解压nginx压缩包！！！
+**支持用户自定义配置、二进制文件、安装路径
+**默认创建nginx的系统用户和用户组，来管理nginx
+**需要：用户事先配置yum源，以解决软件依赖问题
+**支持在成功安装nginx后，自动创建service服务
+**支持通过service nginx start|stop|restatr等管理nginx
+
+*********************************************
+
+EOF
+read -p”是否知晓并同意以上内容？yes/no“ ans
+[ "$ans" = 'no' -o "$ans" = 'n' ] && echo "欢迎下次使用哦^_^..88" && exit 1
+	
+
+
+#第一步，首先解决源码包安装nginx所需要的依赖“gcc pcre-devel openssl-devel zlib-devel”
+pack="gcc pcre-devel openssl-devel zlib-devel"
+yum -y install $pack
+
+#遍历软件是否已全部安装成功?
+for i in $pack;do
+	rpm -q $i > /dev/null
+	[ $? -ne 0 ] && echo "未能成功安装依赖-${i}-,请检查您的环境" && exit 1
+done
+
+
+#创建nginx系统用户，无登陆权限，无家目录
+#判断在“/etc/passwd”否有nginx用户，如果没有则自动创建
+
+#取出组用户名
+group_name=`cat /etc/group | cut -d':' -f1`
+echo $group_name |grep 'nginx' > /dev/null
+#判断在/etc/group中有无nginx组用户,没有，则创建
+if [ $? -ne 0 ];then
+	groupadd -r nginx &>/dev/null
+fi
+
+#取出“/etc/passwd”中的用户
+user_name=`cat /etc/passwd | cut -d':' -f1`
+echo $user_name | grep 'nginx' > /dev/null
+#判断在/etc/passwd中有无nginx用户
+if [ $? -ne 0 ]; then
+	useradd -r -g nginx -s /sbin/nologin  -M nginx
+fi
+
+
+
+#让用户指出解压缩后的nginx目录,如果目录输入错误则要求用户一再输入;而且具有基本的判断功能，
+#即帮助用户来判断：用户输入的目录是否就是正确的目录
+input_nginx_dir
+
+#清理用户的编译现场
+
+
+#打印菜单,包含nginx的常用安装路径
+cat <<EOF
+****************************************
+****************************************
+**********默认安装路径***************
+默认用户为nginx，默认组为nginx
+默认安装路径：/usr/local/nginx
+默认的二进制路径：/usr/local/nginx/sbin/nginx
+默认的配置路径： /usr/local/nginx/conf/nginx.conf
+默认启用openssl模块
+****************************************
+****************************************
+EOF
+read -p“是否同意以上默认配置，yes/no” ans
+
+if [ "$ans" = 'yes' -o "$ans" = 'y' ] ;then
+	./configure --user=nginx --group=nginx --with-http_ssl_module
+
+	if [ $? -eq 0 ];then
+		make && make install && echo "恭喜您，安装成功"
+	else
+		echo "配置失败，请查看错误信息" 
+		exit 2
+	fi
+
+#创建二进制文件的软连接
+	read -p"是否为您在/usr/local/bin下，创建二进制文件nginx的软连接？yes/no" ans
+	if [ "$ans" = 'yes' -o "$ans" = 'y' ];then
+		ln -sv /usr/local/nginx/sbin/nginx /usr/local/bin/nginx	
+	fi
+#创建nginx的service服务，以方便用户通过service快捷管理nginx	的启动/停止等
+	read -p"是否为您在/etc/init.d下创建service的服务，以方便nginx启动/停止等？yes/no" ans
+	if [ "$ans" = 'yes' -o "$ans" = 'y' ];then
+		cd $original_dir
+		cp ./nginx.server /etc/init.d/nginx
+		chomd +x /etc/init.d/nginx
+		echo "service服务已经正确安装，谢谢您的使用"
+	fi
+		
+else
+	read -p"请输入nginx的安装路径，默认回车，则缺省为：/usr/local/nginx" nginx_install
+	[ -z $nginx_dir ] && nginx_dir="/usr/local/nginx"
+	read -p"请输入二进制安装路径,默认缺省为：如下：/usr/local/bin/nginx" bin_dir
+	[ -z $nginx_dir ] && bin_dir="/usr/local/bin/nginx"
+	read -p"请输入配置文件路径，默认缺省为：比如：/etc/nginx.conf"  conf_dir
+	[ -z $nginx_dir ] && conf_dir="/etc/nginx.conf"
+ 
+	./configure  --prefix=$nginx_install --user=nginx --group=nginx --with-http_ssl_module --sbin-path="$bin_dir" --conf-path="$conf_dir"
+
+if [ $? -eq 0 ];then
+#如果配置成功，则自动编译和安装
+	make && make install && echo "恭喜您，软件安装成功哦" 
+#如果编译或者安装错误，则打印提示信息，并退出
+	[ $? -ne 0 ] && echo "安装失败，请检查错误信息" && exit 4
+else
+#配置失败，则打印提示，并自动退出
+	echo "安装失败，请检查错误信息"
+	exit 3
+fi
+
+#创建二进制文件的软连接
+	read -p"是否为您在/usr/local/bin下，创建二进制文件nginx的软连接？yes/no" ans
+	if [ "$ans" = 'yes' -o "$ans" = 'y' ];then
+		if [ -f $bin_dir ]; then
+			[ -e /usr/local/bin/nginx ] && echo "路径/usr/local/bin/nginx已存在。。请检查路径"
+			ln -sv $bin_dir /usr/local/bin/nginx	
+		elif [ -d $sbin_dir ]; then
+			[ -e /usr/local/bin/nginx ] && echo "路径/usr/local/bin/nginx已存在。。请检查路径"
+			ln -sv $sbin_dir/nginx /usr/local/bin/nginx
+		fi
+	fi
+#创建nginx的service服务，以方便用户通过service快捷管理nginx	的启动/停止等
+	read -p"是否为您在/etc/init.d下创建service的服务，以方便nginx启动/停止等？yes/no" ans
+	if [ "$ans" = 'yes' -o "$ans" = 'y' ];then
+#返回原始路径，做脚本的迁移
+		cd $original_dir
+		sed -ri "s#(^nginx=).*#\1${bin_dir}#g" nginx.server
+		sed -ri "s#(^NGINX_CONF_FILE=).*#\1${conf_dir}#g" nginx.server
+#把刚刚修改完的数据落地到磁盘，并延迟一秒
+		sync
+		sleep 1
+		cp ./nginx.server /etc/init.d/nginx
+		chmod +x /etc/init.d/nginx
+		echo "service服务已经正确安装，谢谢您的使用"
+	fi
+
+fi 
