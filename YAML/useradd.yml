@@ -1,0 +1,5 @@
+- hosts: node5
+  remote_user: root
+  tasks:
+  - name: add user
+    user: name=jack state=present

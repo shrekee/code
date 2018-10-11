@@ -1,0 +1,5 @@
+[zabbix_offical]
+name=zabbix
+baseurl=http://repo.zabbix.com/zabbix/3.5/rhel/7/x86_64/
+gpgcheck=0
+enabled=1

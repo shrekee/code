@@ -1,0 +1,3 @@
+---                                                                                                                  
+- name: install php
+  yum: name=php state=latest

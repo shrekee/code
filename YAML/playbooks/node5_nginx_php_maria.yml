@@ -1,0 +1,6 @@
+- hosts: node5
+  roles: 
+  - php_install 
+  - nginx_install 
+  - mariadb-server_install
+

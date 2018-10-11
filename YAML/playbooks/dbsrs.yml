@@ -1,0 +1,4 @@
+---
+- hosts: node6
+  roles: 
+  - dbservers

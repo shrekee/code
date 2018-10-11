@@ -1,0 +1,9 @@
+---
+- name: install httpd 
+  yum: name=httpd state=latest 
+- name: start httpd 
+  service: name=httpd state=started  enabled=yes 
+- name: copy conf_file 
+  copy: src=/root/code/YAML/playbooks/roles/httpd_install/files/httpd.conf dest=/etc/httpd/conf/httpd.conf
+  notify:
+  - Restart httpd

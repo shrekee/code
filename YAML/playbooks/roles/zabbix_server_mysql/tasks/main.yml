@@ -1,0 +1,13 @@
+---
+- name: copy zabbix-release 
+  copy: src=/root/code/YAML/playbooks/roles/zabbix_server_mysql/files/zabbix_offical.repo dest=/etc/yum.repos.d
+- name: install zabbix-server-mysql
+  yum: name={{ item }} state=latest
+  with_items: 
+  - zabbix-server-mysql
+  - zabbix-get
+
+
+- name: start zabbix-server
+  service: name=zabbix-server  enabled=yes state=started
+...

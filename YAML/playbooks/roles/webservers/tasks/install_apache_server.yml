@@ -1,0 +1,13 @@
+---
+- name: install apache
+  yum: name=httpd state=latest
+
+- name: copy file
+  copy: src=~/code/YAML/apache/httpd.conf dest=/etc/httpd/conf/httpd.conf
+  tags: 
+  - conf
+  notify:
+  - Restart apache
+
+- name: start apache
+  service: name=httpd state=started

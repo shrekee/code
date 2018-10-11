@@ -1,0 +1,4 @@
+---
+- hosts: node5
+  roles: 
+  - zabbix_server_mysql

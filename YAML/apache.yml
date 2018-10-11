@@ -1,0 +1,13 @@
+---
+- hosts: node6 
+  tasks: 
+  - name: install httpd
+    yum: name=httpd state=present
+  - name: copy httpd's conf file
+    copy: src=/root/code/YAML/apache/httpd.conf dest=/etc/httpd/conf/httpd.conf
+  - name: start httpd
+    service: name=httpd state=started
+...
+
+
+
