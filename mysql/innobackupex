@@ -1,0 +1,1 @@
+innobackupex  --defaults-file=/usr/local/mysql/my.cnf  --user=admin  --password=***  --socket=/tmp/mysql.sock /tmp/xtrabak/
