@@ -1,20 +1,20 @@
-#!/usr/local/bin/python3
+#!/usr/local/bin/python
 #coding:utf8
 
 #导入统计时间模块
 import time
 #记录开始时间，用变量start保存
-start = time.process_time()
+start = time.time()
 #定义列表，用于保存素数，从2开始。
 lst=[2]
-for i in range(3,400000,2):
-	for j in range(2,int(i**0.5)+1):
+for i in xrange(3,400000,2):
+	for j in xrange(2,int(i**0.5)+1):
 		if i%j == 0:
 			break
 	else:
 		lst.append(i)
 #记录结束时间
-end = time.process_time()
+end = time.time()
 #结束时间减去开始时间，等于deru
 deru=end-start
 #打印所有的素数
