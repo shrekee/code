@@ -14,9 +14,9 @@ func main() {
 	prime[0] =2
 	start_time := time.Now()
 
-	for i =3; i <= nub;i += 2 {
+	for i =3; i<=nub; i+=2 {
 		mid := uint64(math.Sqrt(float64(i)))
-		for j =2; j <= (mid + 1); j++ {
+		for j =2; j<= (mid + 1); j++ {
 			if i%j == 0 {
 				break
 			}

@@ -1,0 +1,14 @@
+import java.util.*
+public class Test1 {
+    public static void main(String[] args) {
+        Set set = new HashSet();
+        set.add("abc");
+        set.add("cde");
+        System.out.println("size="+ set.size());
+
+
+
+    }
+
+
+}
