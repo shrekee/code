@@ -1,0 +1,31 @@
+cluster:
+  cluster01:
+    host:
+      host01:
+        disk: 2
+        include-vm: true
+        ip: 1.1.1.1
+        mem: 14G
+        name: 1.1.1.1
+        nic: 2
+        vm:
+          vm01:
+            ha: true
+            ip: 10.1.1.1
+            iso-dir: /var/lib/libvirt/images
+            name: vm001
+            xml-dir: /etc/libvirt/qemu
+          vm02: vm002
+      host02:
+        name: 2.2.2.2
+        vm: vm03 vm04
+  cluster02:
+    host:
+      host03:
+        name: 3.3.3.3
+        vm:
+          vm01: vm001
+          vm02: vm002
+      host04:
+        name: 4.4.4.4
+        vm: vm03 vm04
