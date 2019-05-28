@@ -1,0 +1,24 @@
+#!/bin/bash
+
+func input(arg){
+    read -p"$arg" thing
+    return thing
+}
+
+res=input(请输入dom 名字)
+echo $res
+
+read -p"请输入dom 名字" domName
+if test -z $domName ;then
+    read -p"请输入dom 名字" domName
+fi
+    
+domuuid=$(uuidgen)
+read -p"内存"   domMemCurrent
+read -p"最大内存"   domMemMax
+read -p"虚拟cpu数"   domVcpu
+
+
+echo -e "${domName}\t${domMemCurrent}"
+echo "$domuuid"
+
