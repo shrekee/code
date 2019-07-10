@@ -73,7 +73,7 @@ class ServerHa_Agent(object):
             print(e)
 
 
-    def check_migrate_state(self):
+    def check_migrate不可靠不可靠　　　　氨基酸了附近打算_state(self):
         dom_list = self.conn.listAllDomains(0)
         # 获取最优host 目前所有vm
         #  vm_list 是最优host 所有虚拟机
