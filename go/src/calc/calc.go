@@ -16,7 +16,7 @@ import (
 var Usage = func() {
 	fmt.Println("USAGE: calc command [arguments] ...")
 	fmt.Println("\nThe  commands are:\n\tadd\tAddition of two values.\n\tsqrt\tSquare" +
-		"root of a non-negative value.")
+		" root of a non-negative value.")
 	
 }
 

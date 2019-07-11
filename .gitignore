@@ -1,15 +1,15 @@
 #java
-.idea
-.class
-.db
-.log
+*.idea
+*.class
+*.db
+*.log
 *.ctxt
 *.jar
 *.war
 *.nar
 
 #C-lang
-.so
+*.so
 *.d
 *.o
 *.ko
@@ -26,9 +26,9 @@
 
 
 #python
-.py[cod]
-.egg
-.egg-info
+*.py[cod]
+*.egg
+*.egg-info
 dist
 build
 .ini
