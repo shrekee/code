@@ -1,40 +1,40 @@
 package main
 
+import "time"
+
 /**
  * author       : liwenqiang
  *creating_time : 19-7-12 下午5:16
  * file_name    : select_test_01.py
  * IDE          : GoLand
 **/
+type Vector []float64
 
-import "time"
 timeout := make(chan bool, 1)
 
-go func() {
+go func () {
 	time.Sleep(1e9)
 	timeout <- true
 }()
 
 //
 select {
-	case <-ch:
-	//...
-		fmt.Println("zz")
-	case <- timeout:
-		//..
+case <-ch:
+//...
+fmt.Println("zz")
+case <- timeout:
+//..
 }
 
-type Vector []float64
-
-func (v Vector) DoSome(i, n int,u Vector, c Chan int){
+func (v Vector) DoSome(i, n int, u Vector, c Chan int) {
 	for ; i < n; i++ {
 		v[i] += u.Op(v[i])
 	}
 }
 
-const NCPU  = 16
+const NCPU = 16
 
-func (v Vector) DoAll(u Vector)  {
+func (v Vector) DoAll(u Vector) {
 
 	c := make(chan int, NCPU)
 

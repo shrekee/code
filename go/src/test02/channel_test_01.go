@@ -9,13 +9,13 @@ package main
 import "fmt"
 import "time"
 
-func Count(ch chan int, value int)  {
+func Count(ch chan int, value int) {
 	ch <- value
 	fmt.Println("Counting ")
 	time.Sleep(1e9)
 }
 
-func main()  {
+func main() {
 	chs := make([]chan int, 10)
 	for i := 0; i < 10; i++ {
 		chs[i] = make(chan int)
@@ -25,6 +25,7 @@ func main()  {
 	for _, ch := range chs {
 		value := <-ch
 		fmt.Println("value ", value)
+		//time.Sleep(1e7)
 	}
 	time.Sleep(1e9)
 }
