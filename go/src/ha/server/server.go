@@ -13,6 +13,7 @@ import (
 	"bufio"
 	"os"
 	"ha/tools"
+	"os/exec"
 )
 
 /**
@@ -67,8 +68,8 @@ var (
 	HAHosts       = make([]string, 0, 100)
 	activeHAHosts = make([]string, 0, 100)
 	//  channel
-	pingChan = make(chan string)
-	clientChan= make(chan string)
+	pingChan   = make(chan string)
+	clientChan = make(chan string)
 )
 
 const (
@@ -88,7 +89,8 @@ func main() {
 	// 目标是读取yaml格式的文件，获取所有主机的信息
 	// 通过第三方模块 spf13/viper
 	//初始集群主机成员
-	clusterMem = append(clusterMem, "192.168.1.1", "192.168.1.2", "127.0.0.1","192.168.123.1")
+	clusterMem = append(clusterMem, "192.168.1.1", "192.168.1.2",
+		"127.0.0.1", "192.168.123.1", "192.168.123.101","192.168.123.102")
 	// HA集群主机成员
 	HAHosts = append(HAHosts, "127.0.0.1", "192.168.1.1")
 	//clusterMem = append(clusterMem, "192.168.1.1", "192.168.1.2")
@@ -160,18 +162,11 @@ func main() {
 		}
 	}()
 
-	// 线程: 用于打印超时的连接.
-	//go func() {
-	//	for  {
-	//		fmt.Println("TimeoutConnetions: ",timeoutHosts)
-	//		time.Sleep(time.Duration(2)*time.Second)
-	//
-	//	}
-	//}()
 	// 线程： 用于交互命令行输入
 	go readLine()
+
 	//go ping(pingChan)
-	go handleSockTimeOut(pingChan,clientChan)
+	go handleSockTimeOut()
 	// 阻塞主线程
 	select {}
 
@@ -183,11 +178,13 @@ func connHandler(conn net.Conn) {
 	queueHandle := make(chan string)
 	buf := make([]byte, 512)
 
-	go func(clientQueue,queue chan string) {
+	go func(queue chan string) {
 		// 处理写入的线程
 		go func() {
-			command:=<-clientQueue
+			command := <-clientChan
 			conn.Write([]byte(command))
+			// 睡眠三秒，目标：让clientQueue的item发送到每个接受的线程中，刚好每个线程一个。
+			time.Sleep(3e9)
 		}()
 		for {
 			//var buf [512]byte
@@ -200,7 +197,7 @@ func connHandler(conn net.Conn) {
 			cntString := string(buf[0:n])
 			queue <- cntString
 		}
-	}(clientChan,queueHandle)
+	}(queueHandle)
 
 	go HeartBeating(conn, queueHandle)
 
@@ -215,22 +212,22 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 		select {
 		case r := <-readerChannel:
 			deltaTime = 0
-			rec:=string(r)
-			if rec=="1"{
-				Log("Received heart beating:",remoteAddr.String())
+			rec := string(r)
+			if rec == "1" {
+				Log("Received heart beating:", remoteAddr.String())
 				conn.SetDeadline(time.Now().Add(time.Duration(sockTimeout) * time.Second))
-			}else {
-				recSlice:=strings.Split(rec,":")
-				if len(recSlice)>1{
+			} else {
+				recSlice := strings.Split(rec, ":")
+				if len(recSlice) > 1 {
 					switch recSlice[0] {
 					case "ping":
-						fmt.Println("ping")
+						fmt.Println("======ping")
 						fmt.Println(rec)
 					case "destory":
-						fmt.Println("destory")
+						fmt.Println("======destory")
 						fmt.Println(rec)
 					default:
-						fmt.Println("default")
+						fmt.Println("======default")
 						fmt.Println(rec)
 					}
 				}
@@ -239,10 +236,12 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 			deltaTime += sockCheckInterval
 			Log("Warning: Time elapsed ", deltaTime, "seconds, and no heartbeat for", remoteAddr.String())
 			if deltaTime >= sockTimeout {
-				Log("Error: Connection timeout: socket", remoteAddr.String(), "is disconnected after elapsed time"+
+				// 断开超时的socket连接
+				conn.Close()
+				Log("Error: connection timeout: socket", remoteAddr.String())
+				Log("Disconnected: after elapsed time"+
 					"", sockTimeout, "seconds with no heartbeat")
-				//把连接超时的远端ip地址发给server的主线程
-				pingChan<-remoteAddIP
+				// 清理环境："丢失主机切片"和"在线主机切片"
 				isExistHost := false
 				mutex1.Lock()
 				{
@@ -262,16 +261,14 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 							onlineHosts, err = tools.StrSRemove(onlineHosts, k)
 							if err != nil {
 								fmt.Println("Fatal error: ", err.Error())
-								return
 							}
 						}
 					}
 				}
 				mutex1.Unlock()
-				/*
-				do something to tell server: this remote connection is closed~~
-				 */
-				conn.Close()
+
+				// 把连接超时的远端ip地址发给server的主线程
+				pingChan <- remoteAddIP
 				return
 			}
 		}
@@ -338,17 +335,37 @@ func ping(ch chan string) error {
 	return nil
 }
 
-func handleSockTimeOut(ch,clientChan chan string){
-	for  {
-		params := <-ch
-		err := tools.Ping(params)
-		if err!=nil{
-			fmt.Println("Error: ", err.Error())
-			for i:=0;i<len(onlineHosts) ;i++  {
-				clientChan<-params
+func handleSockTimeOut() {
+	for {
+		params := <-pingChan
+		//err := tools.Ping(params)
+		exitCode:=Ping(params)
+		//Log("Ping done: ,err is: ",err)
+		if exitCode ==1{
+			Log("Error: serverHost ping host failed:",params)
+			Log("=====onlineHost is:",onlineHosts)
+			for i := 0; i < len(onlineHosts); i++ {
+				clientChan <- ("ping:"+params)
 			}
+		}else{
+			Log("==============================================")
+			Log("Warning: Host does not have heart beat:",params)
+			Log("==============================================")
+
 		}
 	}
 }
 
+func Ping(dst string) int {
+	out, _ := exec.Command("ping", dst, "-c 5", "-w 10").Output()
+	fmt.Println("out: ", string(out))
+	if len(out) == 0 || strings.Contains(string(out), "0 received") {
+		//fmt.Println("TANGO DOWN")
+		return 1
+	} else {
+		//fmt.Println("IT'S ALIVEEE")
+		return 0
+	}
+
+}
 

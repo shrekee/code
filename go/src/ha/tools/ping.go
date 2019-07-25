@@ -16,7 +16,7 @@ import (
 func Ping(parms string) error {
 	p := fastping.NewPinger()
 	ra, err := net.ResolveIPAddr("ip4:icmp", parms)
-	fmt.Println("ip: ", ra)
+	fmt.Println("Ping ip is: ", ra)
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
