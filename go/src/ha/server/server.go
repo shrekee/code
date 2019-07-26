@@ -90,7 +90,7 @@ func main() {
 	// 通过第三方模块 spf13/viper
 	//初始集群主机成员
 	clusterMem = append(clusterMem, "192.168.1.1", "192.168.1.2",
-		"127.0.0.1", "192.168.123.1", "192.168.123.101","192.168.123.102")
+		"127.0.0.1", "192.168.123.1", "192.168.123.101", "192.168.123.102")
 	// HA集群主机成员
 	HAHosts = append(HAHosts, "127.0.0.1", "192.168.1.1")
 	//clusterMem = append(clusterMem, "192.168.1.1", "192.168.1.2")
@@ -100,7 +100,7 @@ func main() {
 		Log("Fatal createServer errors: ", err.Error())
 		return
 	}
-	// 线程: 用于接受socket连接
+	// tcp Server主要逻辑线程: 用于接受clients的socket连接请求，并处理之间的信息沟通
 	go func() {
 		for {
 			conn, err := server.Accept()
@@ -126,17 +126,22 @@ func main() {
 			// 把给主机ip添加进在线主机列表
 			isExisthost := false
 			mutex1.Lock()
-			{
-				// 添加新的主机host的IP,加入已经连接，则提示已经连接，并断开此新的连接
-				for _, v := range onlineHosts {
-					if v == remoteAddrIP {
-						isExisthost = true
-						Log("Warning: ", remoteAddrIP, " already in this cluster")
-						Log("Disconnecting....")
-						conn.Close()
-						break
-					}
+			// 添加新的主机host的IP,加入已经连接，则提示已经连接，并断开此新的连接
+			for _, v := range onlineHosts {
+				if v == remoteAddrIP {
+					isExisthost = true
+					Log("Warning: ", remoteAddrIP, " already in this cluster")
+					Log("Disconnecting....")
+					conn.Close()
+					break
 				}
+			}
+			mutex1.Unlock()
+
+			// 把主机添加进 “在线主机列表”； 同时从“超时”主机立列表中删除此主机，如果存在的话
+			if !isExisthost {
+				mutex1.Lock()
+				onlineHosts = append(onlineHosts, remoteAddrIP)
 				// 删除超时连接的host的IP
 				for k, v := range timeoutHosts {
 					if v == remoteAddrIP {
@@ -147,17 +152,12 @@ func main() {
 						break
 					}
 				}
-			}
-			mutex1.Unlock()
-
-			if !isExisthost {
-				mutex1.Lock()
-				onlineHosts = append(onlineHosts, remoteAddrIP)
 				mutex1.Unlock()
 				fmt.Printf("Connected to : %s\n", conn.RemoteAddr().String())
-				//queue := make(chan string, 100)
+
+				// queue := make(chan string, 100)
+				// 与每个client sock处理逻辑的线程，负责主要的沟通逻辑
 				go connHandler(conn)
-				isExisthost = false
 			}
 		}
 	}()
@@ -183,6 +183,7 @@ func connHandler(conn net.Conn) {
 		go func() {
 			command := <-clientChan
 			conn.Write([]byte(command))
+
 			// 睡眠三秒，目标：让clientQueue的item发送到每个接受的线程中，刚好每个线程一个。
 			time.Sleep(3e9)
 		}()
@@ -221,7 +222,12 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 				if len(recSlice) > 1 {
 					switch recSlice[0] {
 					case "ping":
-						fmt.Println("======ping")
+						fmt.Println("=====Ping Results=====")
+						if strings.HasSuffix(r,"failed"){
+							Log("Error: ",remoteAddIP,"->",rec)
+						}else {
+							Log("Success: ",remoteAddIP,"->",rec)
+						}
 						fmt.Println(rec)
 					case "destory":
 						fmt.Println("======destory")
@@ -244,24 +250,27 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 				// 清理环境："丢失主机切片"和"在线主机切片"
 				isExistHost := false
 				mutex1.Lock()
-				{
-					for _, v := range timeoutHosts {
-						if v == remoteAddIP {
-							isExistHost = true
-							break
-						}
+				for _, v := range timeoutHosts {
+					if v == remoteAddIP {
+						isExistHost = true
+						break
 					}
-					if !isExistHost {
-						timeoutHosts = append(timeoutHosts, strings.Split(remoteAddr.String(), ":")[0])
-					}
+				}
+				mutex1.Unlock()
+				if !isExistHost {
+					mutex1.Lock()
+					timeoutHosts = append(timeoutHosts, strings.Split(remoteAddr.String(), ":")[0])
+					mutex1.Unlock()
+				}
 
-					for k, v := range onlineHosts {
-						if remoteAddIP == v {
-							var err error
-							onlineHosts, err = tools.StrSRemove(onlineHosts, k)
-							if err != nil {
-								fmt.Println("Fatal error: ", err.Error())
-							}
+				mutex1.Lock()
+				for k, v := range onlineHosts {
+					if remoteAddIP == v {
+						var err error
+						onlineHosts, err = tools.StrSRemove(onlineHosts, k)
+						if err != nil {
+							Log("Error: ===================")
+							Log("Fatal error: ", err.Error())
 						}
 					}
 				}
@@ -313,6 +322,7 @@ func readLine() {
 			fmt.Println("timeout hosts", timeoutHosts)
 		case "ha":
 			fmt.Println("ha members:", HAHosts)
+			fmt.Println("online hosts:", onlineHosts)
 			fmt.Println("ha online hosts", activeHAHosts)
 
 		default:
@@ -325,47 +335,51 @@ func readLine() {
 	}
 }
 
-func ping(ch chan string) error {
-	params := <-ch
-	err := tools.Ping(params)
-	if err != nil {
-		fmt.Println("Error: ", err.Error())
-		return err
-	}
-	return nil
-}
+//func ping(ch chan string) error {
+//	params := <-ch
+//	err := tools.Ping(params)
+//	if err != nil {
+//		fmt.Println("Error: ", err.Error())
+//		return err
+//	}
+//	return nil
+//}
 
 func handleSockTimeOut() {
 	for {
 		params := <-pingChan
-		//err := tools.Ping(params)
-		exitCode:=Ping(params)
-		//Log("Ping done: ,err is: ",err)
-		if exitCode ==1{
-			Log("Error: serverHost ping host failed:",params)
-			Log("=====onlineHost is:",onlineHosts)
+		exitCode := Ping(params)
+		if exitCode == 1 {
+			// failed.
+			Log("Error: serverHost ping host failed:", params)
+			Log("=====onlineHost is:", onlineHosts)
 			for i := 0; i < len(onlineHosts); i++ {
-				clientChan <- ("ping:"+params)
+				clientChan <- ("ping:" + params)
 			}
-		}else{
+		} else {
+			// ping success.
 			Log("==============================================")
-			Log("Warning: Host does not have heart beat:",params)
+			Log("Warning: Host does not have heart beat:", params)
 			Log("==============================================")
+
+			// 下一步： 通过主机的ssh，连接到该client，重启该客户端一次
+			// 。。。。。
 
 		}
 	}
 }
 
 func Ping(dst string) int {
+	// return 0, if ping success
+	// return 1, if ping failed
 	out, _ := exec.Command("ping", dst, "-c 5", "-w 10").Output()
 	fmt.Println("out: ", string(out))
 	if len(out) == 0 || strings.Contains(string(out), "0 received") {
-		//fmt.Println("TANGO DOWN")
+		// failed
 		return 1
 	} else {
-		//fmt.Println("IT'S ALIVEEE")
+		// success
 		return 0
 	}
 
 }
-
