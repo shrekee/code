@@ -100,6 +100,7 @@ func main() {
 		Log("Fatal createServer errors: ", err.Error())
 		return
 	}
+	defer server.Close()
 	// tcp Server主要逻辑线程: 用于接受clients的socket连接请求，并处理之间的信息沟通
 	go func() {
 		for {
@@ -175,19 +176,33 @@ func main() {
 func connHandler(conn net.Conn) {
 	//remoteAddr := conn.RemoteAddr()
 
+	// 一个socket的是否存活的标志变量
+	sockIsAlive := true
+
 	queueHandle := make(chan string)
 	buf := make([]byte, 512)
 
-	go func(queue chan string) {
-		// 处理写入的线程
-		go func() {
+	// 处理写入的线程
+	go func() {
+		for {
+			// 如果socket 连接关闭，则关闭此线程
+			if !sockIsAlive {
+				return
+			}
+
 			command := <-clientChan
+			log.Println(command)
 			conn.Write([]byte(command))
 
-			// 睡眠三秒，目标：让clientQueue的item发送到每个接受的线程中，刚好每个线程一个。
-			time.Sleep(3e9)
-		}()
+			// 睡眠一秒，目标：让clientQueue的item发送到每个接受的线程中，刚好每个线程一个。
+			time.Sleep(1e9)
+		}
+	}()
+
+	// 处理读取的线程
+	go func(queue chan string) {
 		for {
+
 			//var buf [512]byte
 			n, err := conn.Read(buf)
 			if err != nil {
@@ -200,11 +215,12 @@ func connHandler(conn net.Conn) {
 		}
 	}(queueHandle)
 
-	go HeartBeating(conn, queueHandle)
+	// 用以接受client端的心跳信息
+	go HeartBeating(conn, queueHandle, &sockIsAlive)
 
 }
 
-func HeartBeating(conn net.Conn, readerChannel chan string) {
+func HeartBeating(conn net.Conn, readerChannel chan string, sockAlive *bool) {
 
 	var deltaTime int = 0
 	remoteAddr := conn.RemoteAddr()
@@ -223,10 +239,10 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 					switch recSlice[0] {
 					case "ping":
 						fmt.Println("=====Ping Results=====")
-						if strings.HasSuffix(r,"failed"){
-							Log("Error: ",remoteAddIP,"->",rec)
-						}else {
-							Log("Success: ",remoteAddIP,"->",rec)
+						if strings.HasSuffix(r, "failed") {
+							Log("Error: ", remoteAddIP, "->", rec)
+						} else {
+							Log("Success: ", remoteAddIP, "->", rec)
 						}
 						fmt.Println(rec)
 					case "destory":
@@ -244,6 +260,7 @@ func HeartBeating(conn net.Conn, readerChannel chan string) {
 			if deltaTime >= sockTimeout {
 				// 断开超时的socket连接
 				conn.Close()
+				*sockAlive = false
 				Log("Error: connection timeout: socket", remoteAddr.String())
 				Log("Disconnected: after elapsed time"+
 					"", sockTimeout, "seconds with no heartbeat")
@@ -335,16 +352,6 @@ func readLine() {
 	}
 }
 
-//func ping(ch chan string) error {
-//	params := <-ch
-//	err := tools.Ping(params)
-//	if err != nil {
-//		fmt.Println("Error: ", err.Error())
-//		return err
-//	}
-//	return nil
-//}
-
 func handleSockTimeOut() {
 	for {
 		params := <-pingChan
@@ -354,7 +361,13 @@ func handleSockTimeOut() {
 			Log("Error: serverHost ping host failed:", params)
 			Log("=====onlineHost is:", onlineHosts)
 			for i := 0; i < len(onlineHosts); i++ {
-				clientChan <- ("ping:" + params)
+				for j := 0; j < 4; j++ {
+					clientChan <- ("ping:" + params)
+					Log("======================================")
+					Log("Send Num_: ", j+1)
+					Log("======================================")
+					time.Sleep(time.Millisecond * 100)
+				}
 			}
 		} else {
 			// ping success.
@@ -372,6 +385,7 @@ func handleSockTimeOut() {
 func Ping(dst string) int {
 	// return 0, if ping success
 	// return 1, if ping failed
+	Log("Try to ping: ", dst)
 	out, _ := exec.Command("ping", dst, "-c 5", "-w 10").Output()
 	fmt.Println("out: ", string(out))
 	if len(out) == 0 || strings.Contains(string(out), "0 received") {
@@ -381,5 +395,4 @@ func Ping(dst string) int {
 		// success
 		return 0
 	}
-
 }
